@@ -147,10 +147,22 @@ def upload_pdf_to_supabase(pdf_buffer, receipt_no):
 
 def deduct_inventory(items):
     for item in items:
-        supabase.rpc("deduct_inventory", {
-            "item_name": item["item"],
-            "qty": item["quantity"]
-        }).execute()
+        name = item["item"]
+        qty = item["quantity"]
+
+        # 1. Fetch the item first
+        res = supabase.table("inventory").select("*").eq("item_name", name).execute()
+        if not res.data:
+            print(f"Item '{name}' not found in inventory.")
+            continue
+
+        current_qty = res.data[0]["quantity"]
+        new_qty = max(current_qty - qty, 0)
+
+        # 2. Update quantity
+        supabase.table("inventory").update({
+            "quantity": new_qty
+        }).eq("item_name", name).execute()
 
 def save_receipt_history(receipt_no, customer_name, total_amount, receipt_url, issued_by):
     supabase.table("receipt_history").insert({
