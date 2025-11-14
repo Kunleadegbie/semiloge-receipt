@@ -25,7 +25,7 @@ BUCKET = st.secrets["BUCKET_NAME"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ------------------------------------------------------------
-# SETTINGS
+# APP SETTINGS
 # ------------------------------------------------------------
 COMPANY_NAME = "SEMILOGE TEXTILES"
 LOGO_PATH = "logo.png"
@@ -58,15 +58,26 @@ h1, h2, h3 {
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------
+# AUTHENTICATION FUNCTIONS
+# ------------------------------------------------------------
+def login(full_name, password):
+    """Validate login and return role."""
+    user = supabase.table("users").select("*").eq("full_name", full_name).eq("password", password).execute()
+    if user.data:
+        return user.data[0]["role"]
+    return None
+
+# ------------------------------------------------------------
 # PDF GENERATION
 # ------------------------------------------------------------
-def generate_receipt_pdf(customer_name, items, logo_path):
+def generate_receipt_pdf(customer_name, items, issued_by, logo_path):
     receipt_no = datetime.now().strftime('%Y%m%d%H%M%S')
 
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
+    # Logo
     if os.path.exists(logo_path):
         pdf.image(logo_path, 10, 8, 33)
 
@@ -74,13 +85,16 @@ def generate_receipt_pdf(customer_name, items, logo_path):
     pdf.cell(85)
     pdf.cell(30, 10, COMPANY_NAME, ln=True, align='C')
 
+    # Receipt details
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 10, f"Receipt No: {receipt_no}", ln=True, align='R')
     pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
+    pdf.cell(0, 10, f"Issued By: {issued_by}", ln=True)
 
-    pdf.ln(10)
+    pdf.ln(5)
     pdf.cell(0, 10, f"Customer Name: {customer_name}", ln=True)
 
+    # Table header
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(60, 10, "Item", 1)
     pdf.cell(40, 10, "Qty", 1)
@@ -110,7 +124,7 @@ def generate_receipt_pdf(customer_name, items, logo_path):
     pdf.cell(140)
     pdf.cell(0, 10, f"Total: NGN{total:,.2f}", ln=True)
 
-    pdf.ln(8)
+    pdf.ln(10)
     pdf.set_font("Helvetica", "I", 11)
     pdf.cell(0, 10, "Thank you for your patronage!", ln=True, align='C')
 
@@ -121,7 +135,7 @@ def generate_receipt_pdf(customer_name, items, logo_path):
     return pdf_buffer, receipt_no, subtotal, vat, total
 
 # ------------------------------------------------------------
-# SUPABASE UPLOAD
+# SUPABASE FUNCTIONS
 # ------------------------------------------------------------
 def upload_pdf_to_supabase(pdf_buffer, receipt_no):
     file_path = f"receipts/receipt_{receipt_no}.pdf"
@@ -131,25 +145,20 @@ def upload_pdf_to_supabase(pdf_buffer, receipt_no):
         file_options={"content-type": "application/pdf"}
     )
 
-# ------------------------------------------------------------
-# INVENTORY DEDUCTION USING WORKING RPC
-# ------------------------------------------------------------
 def deduct_inventory(items):
     for item in items:
         supabase.rpc("deduct_inventory", {
-            "item_name_text": item["item"],
+            "item_name": item["item"],
             "qty": item["quantity"]
         }).execute()
 
-# ------------------------------------------------------------
-# SAVE RECEIPT HISTORY
-# ------------------------------------------------------------
-def save_receipt_history(receipt_no, customer_name, total_amount, receipt_url):
+def save_receipt_history(receipt_no, customer_name, total_amount, receipt_url, issued_by):
     supabase.table("receipt_history").insert({
         "receipt_no": receipt_no,
         "customer_name": customer_name,
         "total_amount": total_amount,
-        "receipt_url": receipt_url
+        "receipt_url": receipt_url,
+        "issued_by": issued_by
     }).execute()
 
 def save_receipt_items(receipt_no, items):
@@ -162,78 +171,103 @@ def save_receipt_items(receipt_no, items):
         }).execute()
 
 # ------------------------------------------------------------
-# SESSION INIT (FIXED: avoid .items() conflict)
+# SESSION INIT
 # ------------------------------------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.role = None
+    st.session_state.full_name = None
+
 if "receipt_items" not in st.session_state:
-    st.session_state["receipt_items"] = []
+    st.session_state.receipt_items = []
 
 # ------------------------------------------------------------
-# NAVIGATION
+# LOGIN PAGE
 # ------------------------------------------------------------
-menu = st.sidebar.radio("Navigation", ["Generate Receipt", "Receipt History"])
+if not st.session_state.logged_in:
+    st.title("🔐 Login")
+
+    full_name = st.text_input("Full Name")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        role = login(full_name, password)
+        if role:
+            st.session_state.logged_in = True
+            st.session_state.role = role
+            st.session_state.full_name = full_name
+            st.rerun()
+        else:
+            st.error("Invalid login details.")
+
+    st.stop()
 
 # ------------------------------------------------------------
-# PAGE 1 — Generate Receipt
+# SIDEBAR NAVIGATION
 # ------------------------------------------------------------
-if menu == "Generate Receipt":
+menu = ["Generate Receipt"]
+if st.session_state.role == "admin":
+    menu.append("Receipt History")
+
+choice = st.sidebar.radio("Navigation", menu)
+
+# ------------------------------------------------------------
+# GENERATE RECEIPT PAGE
+# ------------------------------------------------------------
+if choice == "Generate Receipt":
 
     st.title("🧾 SEMILOGE TEXTILES Receipt Generator")
 
     customer_name = st.text_input("Customer Name")
 
-    st.subheader("➕ Add Item")
+    with st.expander("➕ Add Item"):
+        item = st.text_input("Item name")
+        qty = st.number_input("Quantity", min_value=1, step=1)
+        price = st.number_input("Unit Price (NGN)", min_value=0.0, step=0.01)
 
-    col1, col2, col3 = st.columns([4, 2, 2])
-    with col1:
-        new_item_name = st.text_input("Item Name", key="new_item")
-    with col2:
-        new_item_qty = st.number_input("Quantity", min_value=0, step=1, key="new_qty")
-    with col3:
-        new_item_price = st.number_input("Unit Price (NGN)", min_value=0.0, step=0.01, key="new_price")
-
-    if st.button("Add Item"):
-        if new_item_name and new_item_qty > 0:
-            st.session_state["receipt_items"].append({
-                "item": new_item_name,
-                "quantity": new_item_qty,
-                "unit_price": new_item_price
+        if st.button("Add Item"):
+            st.session_state.receipt_items.append({
+                "item": item,
+                "quantity": qty,
+                "unit_price": price
             })
-            st.success("Item added successfully!")
-        else:
-            st.error("Enter item name and quantity.")
+            st.rerun()
 
     st.subheader("📝 Items Added")
-    if st.session_state["receipt_items"]:
-        st.table(pd.DataFrame(st.session_state["receipt_items"]))
+    if st.session_state.receipt_items:
+        st.table(pd.DataFrame(st.session_state.receipt_items))
     else:
-        st.info("No items added yet.")
+        st.info("No items added.")
 
     if st.button("🗑️ Clear Items"):
-        st.session_state["receipt_items"] = []
+        st.session_state.receipt_items = []
         st.rerun()
 
     if st.button("Generate Receipt"):
         if not customer_name:
             st.error("Enter customer name.")
             st.stop()
-        if not st.session_state["receipt_items"]:
+
+        if not st.session_state.receipt_items:
             st.error("Add at least one item.")
             st.stop()
 
         pdf_buffer, receipt_no, subtotal, vat, total = generate_receipt_pdf(
-            customer_name, st.session_state["receipt_items"], LOGO_PATH
+            customer_name, st.session_state.receipt_items, st.session_state.full_name, LOGO_PATH
         )
 
         upload_pdf_to_supabase(pdf_buffer, receipt_no)
 
-        receipt_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/receipts/receipt_{receipt_no}.pdf"
+        receipt_url = (
+            f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/"
+            f"receipts/receipt_{receipt_no}.pdf"
+        )
 
-        save_receipt_history(receipt_no, customer_name, total, receipt_url)
-        save_receipt_items(receipt_no, st.session_state["receipt_items"])
+        save_receipt_history(receipt_no, customer_name, total, receipt_url, st.session_state.full_name)
+        save_receipt_items(receipt_no, st.session_state.receipt_items)
+        deduct_inventory(st.session_state.receipt_items)
 
-        deduct_inventory(st.session_state["receipt_items"])
-
-        st.success("Receipt generated and recorded successfully!")
+        st.success("Receipt generated successfully!")
         st.write(f"🔗 **Receipt URL:** {receipt_url}")
 
         st.download_button(
@@ -244,9 +278,9 @@ if menu == "Generate Receipt":
         )
 
 # ------------------------------------------------------------
-# PAGE 2 — Receipt History
+# RECEIPT HISTORY PAGE (Admin Only)
 # ------------------------------------------------------------
-elif menu == "Receipt History":
+elif choice == "Receipt History":
 
     st.title("📚 Receipt History")
 
@@ -256,4 +290,6 @@ elif menu == "Receipt History":
     if not receipts:
         st.info("No receipts found.")
     else:
-        st.dataframe(pd.DataFrame(receipts))
+        df = pd.DataFrame(receipts)
+        st.dataframe(df)
+
