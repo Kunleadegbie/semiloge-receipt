@@ -1,0 +1,38 @@
+# Streamlit and Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Environment and virtualenv
+.env
+venv/
+env/
+.venv/
+*.env
+
+# Local configuration and logs
+*.log
+*.ini
+*.cfg
+
+# IDEs
+.vscode/
+.idea/
+
+# Streamlit specific
+.streamlit/secrets.toml
+
+# OS-specific files
+*.bak
+*.tmp
+
+# Local files not needed in deployment
+C:/Users/
+logo_backup/
