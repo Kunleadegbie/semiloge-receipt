@@ -203,13 +203,25 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ------------------------------------------------------------
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION + LOGOUT
 # ------------------------------------------------------------
+st.sidebar.markdown(f"👤 Logged in as: **{st.session_state.full_name}** ({st.session_state.role})")
+
 menu = ["Generate Receipt"]
+
 if st.session_state.role == "admin":
     menu.append("Receipt History")
+    menu.append("Create User")
 
 choice = st.sidebar.radio("Navigation", menu)
+
+# Logout button
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.logged_in = False
+    st.session_state.full_name = None
+    st.session_state.role = None
+    st.session_state.receipt_items = []
+    st.rerun()
 
 # ------------------------------------------------------------
 # GENERATE RECEIPT PAGE
@@ -292,4 +304,32 @@ elif choice == "Receipt History":
     else:
         df = pd.DataFrame(receipts)
         st.dataframe(df)
+
+# ------------------------------------------------------------
+# PAGE 3: CREATE USER (Admin Only)
+# ------------------------------------------------------------
+elif choice == "Create User":
+
+    st.title("👥 Create New User (Admin Only)")
+
+    new_name = st.text_input("Full Name")
+    new_password = st.text_input("Password", type="password")
+    new_role = st.selectbox("Role", ["user", "admin"])
+
+    if st.button("Create User"):
+        if not new_name or not new_password:
+            st.error("Full name and password are required.")
+        else:
+            # Insert into Supabase
+            result = supabase.table("users").insert({
+                "full_name": new_name,
+                "password": new_password,
+                "role": new_role
+            }).execute()
+
+            if result.data:
+                st.success(f"User **{new_name}** created successfully!")
+            else:
+                st.error("Failed to create user. Possibly name already exists.")
+
 
