@@ -1,112 +1,274 @@
-Here’s a professional, Streamlit-ready `README.md` tailored for your **SEMILOGE TEXTILES Receipt Generator** app 👇
 
----
+# ✅ **1. requirements.txt**
 
-# 🧾 SEMILOGE TEXTILES Receipt Generator
-
-A clean, modern Streamlit application that lets SEMILOGE TEXTILES generate **VAT-compliant receipts** for customers.
-It supports multiple items per receipt, automatic VAT (7.5%) computation, branded PDF output with the company logo, and a purple-themed, mobile-friendly interface.
-
----
-
-## 🚀 Features
-
-* 🟣 **Beautiful UI:** custom purple theme, rounded buttons, and centered layout
-* 🧍 **Customer Details:** enter customer name once per receipt
-* 🛍️ **Multiple Items:** add up to 10 items via expandable panels
-* 💰 **Automatic VAT Calculation:** 7.5 % of subtotal is added to the total
-* 🧾 **Instant PDF Receipt:** branded with company logo and timestamped receipt number
-* 🔄 **Clear All Button:** reset session and start a new receipt without refreshing
-* ☁️ **Streamlit Cloud Ready:** no local dependencies needed
-
----
-
-## 🧱 Project Structure
-
-```
-semiloge-receipt/
-│
-├── app.py                 # Main Streamlit app
-├── logo.png               # Company logo (ensure this file is in the repo)
-├── requirements.txt       # Python dependencies
-└── README.md              # Project documentation
-```
-
----
-
-## ⚙️ Setup and Installation
-
-### 1️⃣ Clone the repository
-
-```bash
-git clone https://github.com/<your-username>/semiloge-receipt.git
-cd semiloge-receipt
-```
-
-### 2️⃣ Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3️⃣ Run locally
-
-```bash
-streamlit run app.py
-```
-
-Open [http://localhost:8501](http://localhost:8501) in your browser.
-
----
-
-## 🌐 Deployment on Streamlit Cloud
-
-1. Push your repository to GitHub (including `logo.png`).
-2. Go to [streamlit.io/cloud](https://streamlit.io/cloud).
-3. Click **New app → Connect GitHub → Select repo → Deploy**.
-4. That’s it 🎉 — your receipt generator is live!
-
----
-
-## 🧩 Requirements
-
-Add the following to `requirements.txt`:
+These are the exact dependencies your app needs.
 
 ```
 streamlit
 fpdf2
 pandas
+supabase
+python-dotenv
+requests
+```
+
+> ⚠️ If Streamlit Cloud ever complains about the `supabase` version, I can pin it (e.g., `supabase==2.4.4`).
+> But the generic version normally works fine.
+
+---
+
+# ✅ **2. .gitignore**
+
+This ensures NO secrets, cache files, or local system files get uploaded to GitHub.
+
+```
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Python cache
+__pycache__/
+*.pyc
+
+# MacOS / Windows junk
+.DS_Store
+desktop.ini
+
+# Local environment
+.env
+venv/
+.venv/
+
+# PDF receipts generated locally
+*.pdf
+
+# Any temp files
+tmp/
+temp/
+```
+
+✔ Safe
+✔ Clean GitHub repo
+✔ No credential leakage
+
+---
+
+# ✅ **3. .streamlit/secrets.toml (PLACE THIS ON STREAMLIT CLOUD ONLY)**
+
+⚠️ **DO NOT put this file on GitHub. It belongs only inside Streamlit Cloud → Settings → Secrets.**
+
+Here is the template you should paste in **Streamlit Cloud → App Settings → Secrets**:
+
+```toml
+SUPABASE_URL = "https://luvicbfapuqbxdjfoegd.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1dmljYmZhcHVxYnhkamZvZWdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMzM2NTMsImV4cCI6MjA3ODcwOTY1M30.35ltjT0sU9f6Uc-q-YPafk-ptx0T_kWe4TG8A0lLbfU"
+BUCKET_NAME = "semiloge-receipts"
+```
+
+✔ Secure
+✔ Only accessible to your Streamlit app
+✔ Not committed to GitHub
+
+---
+
+# ✅ **4. README.md (for your GitHub repo)**
+
+---
+
+# 🧾 SEMILOGE TEXTILES — Receipt Generator (Streamlit + Supabase)
+
+A professional multi-item receipt generator for **SEMILOGE TEXTILES**, featuring:
+
+### ✅ Multi-item receipts (up to 10 items)
+
+### ✅ VAT Auto-calculation (7.5%)
+
+### ✅ Automatic inventory deduction (Supabase)
+
+### ✅ PDF receipt generation
+
+### ✅ Upload receipts to Supabase Storage
+
+### ✅ Store receipt metadata in Supabase `receipt_logs`
+
+### ✅ View receipt archive
+
+### ✅ Stylish purple theme
+
+### ✅ Cloud-ready (Streamlit Cloud)
+
+---
+
+## 🚀 Live App
+
+*(Add your Streamlit Cloud link here after deployment)*
+
+```
+https://your-app-name.streamlit.app
 ```
 
 ---
 
-## 🖼️ Logo Handling
+## 📦 Features
 
-To ensure the app works both locally and on Streamlit Cloud, the logo is loaded using a relative path:
+### ✔ Add up to 10 receipt line items
 
-```python
-import os
-LOGO_PATH = os.path.join(os.path.dirname(__file__), "logo.png")
+* Item name
+* Quantity
+* Unit price
+* Automatic total
+
+### ✔ Live preview table
+
+### ✔ Clear items button
+
+### ✔ VAT calculation
+
+### ✔ NGN formatting
+
+### ✔ Receipt numbering
+
+### ✔ File name format:
+
+```
+receipt_<CustomerName>_<ReceiptNo>.pdf
 ```
 
-Make sure `logo.png` exists in the same directory as `app.py`.
+### ✔ Cloud upload
+
+Receipts automatically upload to your Supabase Storage bucket:
+`semiloge-receipts`
+
+### ✔ Inventory deduction
+
+* If item exists → deduct stock
+* If insufficient stock → warn
+* If not found → warn
+* Does NOT block the receipt (Option C)
+
+### ✔ Receipt archive
+
+Displays all stored receipts with download links.
 
 ---
 
-## 📄 Receipt Number Logic
+## 🛠️ Installation (Local)
 
-Each receipt number is auto-generated using a timestamp:
-
+```bash
+git clone <your-repo>
+cd <your-repo>
+pip install -r requirements.txt
+streamlit run app.py
 ```
-YYYYMMDDHHMMSS
-```
-
-This guarantees a unique receipt ID for every transaction.
 
 ---
 
-## 👏 Acknowledgments
+## 🔐 Create `.streamlit/secrets.toml`
+
+Create folder:
+
+```
+mkdir .streamlit
+```
+
+Inside it, create:
+
+```
+secrets.toml
+```
+
+Paste:
+
+```toml
+SUPABASE_URL = "https://luvicbfapuqbxdjfoegd.supabase.co"
+SUPABASE_KEY = "<your-anon-key>"
+BUCKET_NAME = "semiloge-receipts"
+```
+
+---
+
+## 🗄️ Supabase Setup
+
+### 1. Create Tables
+
+#### **inventory**
+
+```sql
+create table if not exists public.inventory (
+    id bigint generated always as identity primary key,
+    item_name text not null,
+    quantity integer not null,
+    unit_price numeric not null,
+    created_at timestamp with time zone default now()
+);
+```
+
+#### **receipt_logs**
+
+```sql
+create table if not exists public.receipt_logs (
+    id bigint generated always as identity primary key,
+    receipt_no text not null,
+    customer_name text not null,
+    total_amount numeric not null,
+    pdf_url text not null,
+    created_at timestamp with time zone default now()
+);
+```
+
+### 2. Storage Bucket
+
+Create bucket:
+
+```
+semiloge-receipts
+```
+
+### 3. Storage Policies
+
+```sql
+create policy "Allow public read"
+on storage.objects for select
+using (bucket_id = 'semiloge-receipts');
+
+create policy "Allow uploads"
+on storage.objects for insert
+to public
+with check (bucket_id = 'semiloge-receipts');
+```
+
+### 4. Disable RLS (recommended)
+
+```sql
+alter table public.inventory disable row level security;
+alter table public.receipt_logs disable row level security;
+```
+
+---
+
+## 🌐 Deploy on Streamlit Cloud
+
+1. Push repo to GitHub
+2. Go to [https://streamlit.io/cloud](https://streamlit.io/cloud)
+3. Create new app
+4. Add your GitHub repo
+5. In Settings → Secrets, paste:
+
+```toml
+SUPABASE_URL = "https://luvicbfapuqbxdjfoegd.supabase.co"
+SUPABASE_KEY = "<your-anon-key>"
+BUCKET_NAME = "semiloge-receipts"
+```
+
+6. Deploy 🎉
+
+---
+
+## 👨‍💻 Author
 
 Developed by **Dr. Adekunle Adegbie (SEMILOGE TEXTILES)**
-Powered by **Python + Streamlit + FPDF2**
+Built with ❤️ using Python, Streamlit, and Supabase.
+
+---
+
+
 
