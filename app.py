@@ -40,12 +40,17 @@ h1, h2, h3 {
     text-align: center;
     color: purple;
 }
-
 .stButton > button {
     background-color: purple !important;
     color: white !important;
     border-radius: 8px !important;
     padding: 8px 20px !important;
+}
+.item-box {
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -75,7 +80,7 @@ def generate_receipt_pdf(customer_name, items, logo_path):
     pdf.ln(10)
     pdf.cell(0, 10, f"Customer Name: {customer_name}", ln=True)
 
-    # Table Header
+    # Table header
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(60, 10, "Item", 1)
     pdf.cell(40, 10, "Qty", 1)
@@ -85,20 +90,18 @@ def generate_receipt_pdf(customer_name, items, logo_path):
     pdf.set_font("Helvetica", "", 12)
 
     subtotal = 0
-
-    for row in items:
-        row_total = row["quantity"] * row["unit_price"]
+    for item in items:
+        row_total = item["quantity"] * item["unit_price"]
         subtotal += row_total
 
-        pdf.cell(60, 10, row["item"], 1)
-        pdf.cell(40, 10, str(row["quantity"]), 1)
-        pdf.cell(40, 10, f"{row['unit_price']:,.2f}", 1)
+        pdf.cell(60, 10, item["item"], 1)
+        pdf.cell(40, 10, str(item["quantity"]), 1)
+        pdf.cell(40, 10, f"{item['unit_price']:,.2f}", 1)
         pdf.cell(40, 10, f"{row_total:,.2f}", 1, ln=True)
 
     vat = subtotal * VAT_RATE
     total = subtotal + vat
 
-    # Totals
     pdf.ln(5)
     pdf.cell(140)
     pdf.cell(0, 10, f"Subtotal: NGN{subtotal:,.2f}", ln=True)
@@ -114,7 +117,9 @@ def generate_receipt_pdf(customer_name, items, logo_path):
     pdf_buffer = BytesIO()
     pdf.output(pdf_buffer)
     pdf_buffer.seek(0)
+
     return pdf_buffer, receipt_no, subtotal, vat, total
+
 
 # ------------------------------------------------------------
 # SUPABASE UPLOAD
@@ -128,13 +133,13 @@ def upload_pdf_to_supabase(pdf_buffer, receipt_no):
     )
 
 # ------------------------------------------------------------
-# INVENTORY DEDUCTION
+# INVENTORY DEDUCTION (matches your Supabase RPC)
 # ------------------------------------------------------------
 def deduct_inventory(items):
     for item in items:
         supabase.rpc(
             "deduct_inventory",
-            {"item_name_input": item["item"], "qty": item["quantity"]}
+            {"p_item_name": item["item"], "p_qty": item["quantity"]}
         ).execute()
 
 # ------------------------------------------------------------
@@ -161,7 +166,7 @@ def save_receipt_items(receipt_no, items):
 # SESSION INIT
 # ------------------------------------------------------------
 if "items" not in st.session_state:
-    st.session_state["items"] = []
+    st.session_state.items = []
 
 # ------------------------------------------------------------
 # SIDEBAR NAVIGATION
@@ -169,7 +174,7 @@ if "items" not in st.session_state:
 menu = st.sidebar.radio("Navigation", ["Generate Receipt", "Receipt History"])
 
 # ------------------------------------------------------------
-# PAGE: GENERATE RECEIPT
+# PAGE 1 — GENERATE RECEIPT
 # ------------------------------------------------------------
 if menu == "Generate Receipt":
 
@@ -177,42 +182,61 @@ if menu == "Generate Receipt":
 
     customer_name = st.text_input("Customer Name")
 
-    st.subheader("➕ Add Up To 10 Items")
-
-    for i in range(10):
+    # ------------------------------------------------------------
+    # *** FIXED ADD ITEM BLOCK (THE ONLY CHANGED PART) ***
+    # ------------------------------------------------------------
+    with st.expander("➕ Add Item"):
         col1, col2, col3 = st.columns([4, 2, 2])
-        item = col1.text_input(f"Item {i+1}", key=f"item_{i}")
-        qty = col2.number_input(f"Qty {i+1}", min_value=0, step=1, key=f"qty_{i}")
-        price = col3.number_input(f"Price {i+1}", min_value=0.0, step=0.01, key=f"price_{i}")
 
-        if item and qty > 0:
-            st.session_state["items"].append({
-                "item": item,
-                "quantity": qty,
-                "unit_price": price
-            })
+        with col1:
+            new_item = st.text_input("Item Name", key="add_item_name")
 
+        with col2:
+            new_qty = st.number_input("Quantity", min_value=1, step=1, key="add_item_qty")
+
+        with col3:
+            new_price = st.number_input("Unit Price (NGN)", min_value=0.0, step=0.01, key="add_item_price")
+
+        if st.button("Add Item"):
+            if not new_item:
+                st.error("Item name cannot be empty.")
+            else:
+                st.session_state.items.append({
+                    "item": new_item,
+                    "quantity": new_qty,
+                    "unit_price": new_price
+                })
+                st.success("Item added successfully!")
+
+                st.session_state.add_item_name = ""
+                st.session_state.add_item_qty = 1
+                st.session_state.add_item_price = 0.0
+                st.rerun()
+
+    # Display items
     st.subheader("📝 Items Added")
-    if st.session_state["items"]:
-        st.table(pd.DataFrame(st.session_state["items"]))
+    if st.session_state.items:
+        st.table(pd.DataFrame(st.session_state.items))
     else:
         st.info("No items added.")
 
+    # Clear button
     if st.button("🗑️ Clear Items"):
-        st.session_state["items"] = []
+        st.session_state.items = []
         st.rerun()
 
+    # Generate receipt
     if st.button("Generate Receipt"):
         if not customer_name:
             st.error("Enter customer name.")
             st.stop()
 
-        if not st.session_state["items"]:
+        if not st.session_state.items:
             st.error("Add at least one item.")
             st.stop()
 
         pdf_buffer, receipt_no, subtotal, vat, total = generate_receipt_pdf(
-            customer_name, st.session_state["items"], LOGO_PATH
+            customer_name, st.session_state.items, LOGO_PATH
         )
 
         upload_pdf_to_supabase(pdf_buffer, receipt_no)
@@ -220,9 +244,9 @@ if menu == "Generate Receipt":
         receipt_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/receipts/receipt_{receipt_no}.pdf"
 
         save_receipt_history(receipt_no, customer_name, total, receipt_url)
-        save_receipt_items(receipt_no, st.session_state["items"])
+        save_receipt_items(receipt_no, st.session_state.items)
 
-        deduct_inventory(st.session_state["items"])
+        deduct_inventory(st.session_state.items)
 
         st.success("Receipt generated and recorded successfully!")
         st.write(f"🔗 **Receipt URL:** {receipt_url}")
@@ -235,13 +259,17 @@ if menu == "Generate Receipt":
         )
 
 # ------------------------------------------------------------
-# PAGE: RECEIPT HISTORY
+# PAGE 2 — RECEIPT HISTORY
 # ------------------------------------------------------------
 elif menu == "Receipt History":
 
     st.title("📚 Receipt History")
 
-    data = supabase.table("receipt_history").select("*").order("created_at", desc=True).execute()
+    data = supabase.table("receipt_history") \
+                   .select("*") \
+                   .order("created_at", desc=True) \
+                   .execute()
+
     receipts = data.data
 
     if not receipts:
@@ -249,3 +277,4 @@ elif menu == "Receipt History":
     else:
         df = pd.DataFrame(receipts)
         st.dataframe(df)
+        st.info("Click a receipt URL to download it.")
