@@ -171,16 +171,17 @@ def save_receipt_items(receipt_no, items):
 
 
 # ------------------------------------------------------------
-# SESSION INIT
+# SESSION INIT (FIXED)
 # ------------------------------------------------------------
-if "items" not in st.session_state:
-    st.session_state.items = []
+if "items" not in st.session_state or not isinstance(st.session_state.get("items"), list):
+    st.session_state["items"] = []
 
 
 # ------------------------------------------------------------
 # SIDEBAR NAVIGATION
 # ------------------------------------------------------------
 menu = st.sidebar.radio("Navigation", ["Generate Receipt", "Receipt History"])
+
 
 # ------------------------------------------------------------
 # PAGE 1: GENERATE RECEIPT
@@ -202,20 +203,20 @@ if menu == "Generate Receipt":
                 price = st.number_input(f"Price {i+1}", min_value=0.0, step=0.01, key=f"price_{i}")
 
             if item and qty > 0:
-                st.session_state.items.append({
+                st.session_state["items"].append({
                     "item": item,
                     "quantity": qty,
                     "unit_price": price
                 })
 
     st.subheader("📝 Items Added")
-    if st.session_state.items:
-        st.table(pd.DataFrame(st.session_state.items))
+    if st.session_state["items"]:
+        st.table(pd.DataFrame(st.session_state["items"]))
     else:
         st.info("No items added.")
 
     if st.button("🗑️ Clear Items"):
-        st.session_state.items = []
+        st.session_state["items"] = []
         st.rerun()
 
     if st.button("Generate Receipt"):
@@ -223,12 +224,12 @@ if menu == "Generate Receipt":
             st.error("Enter customer name.")
             st.stop()
 
-        if not st.session_state.items:
+        if not st.session_state["items"]:
             st.error("Add at least one item.")
             st.stop()
 
         pdf_buffer, receipt_no, subtotal, vat, total = generate_receipt_pdf(
-            customer_name, st.session_state.items, LOGO_PATH
+            customer_name, st.session_state["items"], LOGO_PATH
         )
 
         upload_pdf_to_supabase(pdf_buffer, receipt_no)
@@ -236,10 +237,9 @@ if menu == "Generate Receipt":
         receipt_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/receipts/receipt_{receipt_no}.pdf"
 
         save_receipt_history(receipt_no, customer_name, total, receipt_url)
-        save_receipt_items(receipt_no, st.session_state.items)
+        save_receipt_items(receipt_no, st.session_state["items"])
 
-        # Deduct inventory
-        deduct_inventory(st.session_state.items)
+        deduct_inventory(st.session_state["items"])
 
         st.success("Receipt generated and recorded successfully!")
         st.write(f"🔗 **Receipt URL:** {receipt_url}")
@@ -250,6 +250,7 @@ if menu == "Generate Receipt":
             file_name=f"receipt_{receipt_no}.pdf",
             mime="application/pdf"
         )
+
 
 # ------------------------------------------------------------
 # PAGE 2: RECEIPT HISTORY
@@ -268,4 +269,3 @@ elif menu == "Receipt History":
         st.dataframe(df)
 
         st.info("Click a receipt URL to download it.")
-
