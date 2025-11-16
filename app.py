@@ -93,7 +93,7 @@ def generate_receipt_pdf(customer_name, items, issued_by, logo_path):
         row_total = item["quantity"] * item["unit_price"]
         subtotal += row_total
         pdf.cell(50, 10, item["item"], 1)
-        pdf.cell(40, 10, item["category"], 1)
+        pdf.cell(40, 10, item.get("category", "Uncategorized"), 1)  # FIXED
         pdf.cell(30, 10, str(item["quantity"]), 1)
         pdf.cell(35, 10, f"{item['unit_price']:,.2f}", 1)
         pdf.cell(35, 10, f"{row_total:,.2f}", 1, ln=True)
@@ -121,7 +121,7 @@ def generate_receipt_pdf(customer_name, items, issued_by, logo_path):
 # ------------------------------------------------------------
 def upload_pdf_to_supabase(pdf_buffer, receipt_no):
     file_path = f"receipts/receipt_{receipt_no}.pdf"
-    res = supabase.storage.from_(BUCKET).upload(
+    supabase.storage.from_(BUCKET).upload(
         file_path, pdf_buffer.getvalue(),
         file_options={"content-type": "application/pdf"}
     )
@@ -153,7 +153,7 @@ def save_receipt_items(receipt_no, items):
         supabase.table("receipt_items").insert({
             "receipt_no": receipt_no,
             "item_name": item["item"],
-            "category": item["category"],
+            "category": item.get("category", "Uncategorized"),
             "quantity": item["quantity"],
             "unit_price": item["unit_price"]
         }).execute()
@@ -249,24 +249,19 @@ if menu == "Generate Receipt":
         st.subheader("Add New Item")
 
         item_name = st.text_input("Item Name")
-
         qty = st.number_input("Quantity", min_value=1, step=1)
-
         price = st.number_input("Unit Price", min_value=0.0, step=0.01)
 
         # -------- CATEGORY DROPDOWN --------
-        category_options = supabase.table("inventory").select("category").execute()
-        categories = sorted(list({c["category"] for c in category_options.data if c["category"]}))
+        cat_query = supabase.table("inventory").select("category").execute()
+        categories = sorted(list({c["category"] for c in cat_query.data if c["category"]}))
 
         selected_category = st.selectbox(
             "Category",
             ["Select category", *categories, "Other (type manually)"]
         )
 
-        if selected_category == "Other (type manually)":
-            manual_category = st.text_input("Type New Category")
-        else:
-            manual_category = None
+        manual_category = st.text_input("Type New Category") if selected_category == "Other (type manually)" else None
 
         if st.button("Save Item"):
 
@@ -276,12 +271,14 @@ if menu == "Generate Receipt":
 
             category_value = manual_category if selected_category == "Other (type manually)" else selected_category
 
+            # -------- FIXED AREA --------
             st.session_state.receipt_items.append({
                 "item": item_name,
-                "category": category_value,
+                "category": category_value if category_value else "Uncategorized",
                 "quantity": qty,
                 "unit_price": price
             })
+            # -------- END FIX --------
 
             st.session_state.adding_item = False
             st.rerun()
