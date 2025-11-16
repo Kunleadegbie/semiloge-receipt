@@ -362,5 +362,17 @@ elif choice == "Profit Calculator" and st.session_state.role == "admin":
     res = supabase.table("inventory").select("*").execute()
     df = pd.DataFrame(res.data)
 
-    df["profit_per_item"] = df["unit_price"]
-    st.dataframe(df[["item_name", "quantity", "unit_price", "profit_per_item"]])
+    if df.empty:
+        st.info("No inventory data found.")
+    else:
+        # Check if unit_price column exists
+        if "unit_price" not in df.columns:
+            st.warning("⚠ The inventory table does not contain a 'unit_price' column.")
+            st.info("Please add 'unit_price' to inventory table before using Profit Calculator.")
+            st.stop()
+
+        df["profit_per_item"] = df["unit_price"]  # or profit logic if cost exists
+
+        st.subheader("Profit Summary")
+        st.dataframe(df[["item_name", "quantity", "unit_price", "profit_per_item"]])
+
