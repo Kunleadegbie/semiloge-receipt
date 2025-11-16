@@ -248,20 +248,21 @@ if "user_info" not in st.session_state or st.session_state.user_info is None:
 role = st.session_state.user_info["role"]
 
 # ------------------------------------------------------------
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION (Role-based)
 # ------------------------------------------------------------
 role = st.session_state.user_info["role"]
 
 if role == "Admin":
-    menu = st.sidebar.radio("Navigation", [
-        "Generate Receipt",
-        "Receipt History",
-        "Inventory Viewer",
-        "Create User"
-    ])
+    menu = st.sidebar.radio(
+        "Navigation",
+        ["Generate Receipt", "Receipt History", "Inventory Viewer", "User Management", "Logout"]
+    )
 else:
-    menu = st.sidebar.radio("Navigation", ["Generate Receipt"])
-
+    # Regular User
+    menu = st.sidebar.radio(
+        "Navigation",
+        ["Generate Receipt", "Logout"]
+    )
 
 # ------------------------------------------------------------
 # PAGE: GENERATE RECEIPT
