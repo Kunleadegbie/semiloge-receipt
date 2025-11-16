@@ -31,7 +31,6 @@ COMPANY_NAME = "SEMILOGE TEXTILES"
 LOGO_PATH = "logo.png"
 VAT_RATE = 0.075
 
-
 # ------------------------------------------------------------
 # CSS
 # ------------------------------------------------------------
@@ -56,30 +55,6 @@ h1, h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
-
-# ------------------------------------------------------------
-# LOGIN FUNCTIONS
-# ------------------------------------------------------------
-def login(full_name, password):
-    res = supabase.table("app_users")\
-        .select("*")\
-        .eq("full_name", full_name)\
-        .eq("password", password)\
-        .execute()
-
-    if res.data:
-        return res.data[0]
-    return None
-
-
-def create_user(full_name, password, role):
-    supabase.table("app_users").insert({
-        "full_name": full_name,
-        "password": password,
-        "role": role
-    }).execute()
-
-
 # ------------------------------------------------------------
 # PDF GENERATION
 # ------------------------------------------------------------
@@ -95,12 +70,12 @@ def generate_receipt_pdf(customer_name, items, logo_path, issued_by):
 
     pdf.set_font("Helvetica", "B", 16)
     pdf.cell(85)
-    pdf.cell(30, 10, COMPANY_NAME, ln=True, align="C")
+    pdf.cell(30, 10, COMPANY_NAME, ln=True, align='C')
 
     pdf.set_font("Helvetica", "", 12)
-    pdf.cell(0, 10, f"Receipt No: {receipt_no}", ln=True, align="R")
-    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align="R")
-    pdf.cell(0, 10, f"Issued By: {issued_by}", ln=True)
+    pdf.cell(0, 10, f"Receipt No: {receipt_no}", ln=True, align='R')
+    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
+    pdf.cell(0, 10, f"Issued By: {issued_by}", ln=True, align='R')
 
     pdf.ln(10)
     pdf.cell(0, 10, f"Customer Name: {customer_name}", ln=True)
@@ -136,52 +111,47 @@ def generate_receipt_pdf(customer_name, items, logo_path, issued_by):
 
     pdf.ln(8)
     pdf.set_font("Helvetica", "I", 11)
-    pdf.cell(0, 10, "Thank you for your patronage!", ln=True, align="C")
+    pdf.cell(0, 10, "Thank you for your patronage!", ln=True, align='C')
 
-    buffer = BytesIO()
-    pdf.output(buffer)
-    buffer.seek(0)
+    pdf_buffer = BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)
 
-    return buffer, receipt_no, subtotal, vat, total
+    return pdf_buffer, receipt_no, subtotal, vat, total
 
 
 # ------------------------------------------------------------
-# SUPABASE UPLOAD
+# SUPABASE HELPERS
 # ------------------------------------------------------------
-def upload_pdf_to_supabase(pdf_buffer, receipt_no):
+def upload_pdf(pdf_buffer, receipt_no):
     file_path = f"receipts/receipt_{receipt_no}.pdf"
-    return supabase.storage.from_(BUCKET).upload(
+    supabase.storage.from_(BUCKET).upload(
         file_path,
         pdf_buffer.getvalue(),
         file_options={"content-type": "application/pdf"}
     )
+    return f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/{file_path}"
 
 
-# ------------------------------------------------------------
-# INVENTORY DEDUCTION USING FUNCTION (stable)
-# ------------------------------------------------------------
 def deduct_inventory(items):
     for item in items:
-        supabase.rpc(
-            "deduct_inventory",
-            {"item_name_text": item["item"], "qty_int": item["quantity"]}
-        ).execute()
+        supabase.rpc("deduct_inventory", {
+            "item_name": item["item"],
+            "qty": item["quantity"]
+        }).execute()
 
 
-# ------------------------------------------------------------
-# SAVE RECEIPT HISTORY
-# ------------------------------------------------------------
-def save_receipt_history(receipt_no, customer_name, total_amount, receipt_url, issued_by):
+def save_history(receipt_no, customer, total, url, issued_by):
     supabase.table("receipt_history").insert({
         "receipt_no": receipt_no,
-        "customer_name": customer_name,
-        "total_amount": total_amount,
-        "receipt_url": receipt_url,
+        "customer_name": customer,
+        "total_amount": total,
+        "receipt_url": url,
         "issued_by": issued_by
     }).execute()
 
 
-def save_receipt_items(receipt_no, items):
+def save_items(receipt_no, items):
     for item in items:
         supabase.table("receipt_items").insert({
             "receipt_no": receipt_no,
@@ -191,6 +161,12 @@ def save_receipt_items(receipt_no, items):
         }).execute()
 
 
+def login(username, password):
+    res = supabase.table("users").select("*").eq("full_name", username).eq("password", password).execute()
+    if res.data:
+        return res.data[0]
+    return None
+
 # ------------------------------------------------------------
 # SESSION INIT
 # ------------------------------------------------------------
@@ -198,188 +174,141 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if "user_info" not in st.session_state:
-    st.session_state.user_info = None
+    st.session_state.user_info = {}
 
 if "receipt_items" not in st.session_state:
     st.session_state.receipt_items = []
-
-
 
 # ------------------------------------------------------------
 # LOGIN PAGE
 # ------------------------------------------------------------
 if not st.session_state.logged_in:
-
-    st.title("🔐 Login to Continue")
-
-    full_name = st.text_input("Full Name")
+    st.title("🔐 Login")
+    username = st.text_input("Full Name")
     password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        user = login(full_name, password)
-
+        user = login(username, password)
         if user:
             st.session_state.logged_in = True
             st.session_state.user_info = user
             st.rerun()
         else:
-            st.error("Invalid login credentials.")
+            st.error("Invalid credentials")
 
     st.stop()
 
+# ------------------------------------------------------------
+# DASHBOARD (ROLE-BASED)
+# ------------------------------------------------------------
+role = st.session_state.user_info["role"]
 
-# ------------------------------------------------------------
-# LOGOUT BUTTON
-# ------------------------------------------------------------
-st.sidebar.button("🚪 Logout", on_click=lambda: st.session_state.update({
-    "logged_in": False,
-    "user_info": None
-}))
+st.title(f"Welcome, {st.session_state.user_info['full_name']} 👋")
 
-# ------------------------------------------------------------
-# CHECK LOGIN SESSION BEFORE LOADING DASHBOARD
-# ------------------------------------------------------------
-
-if "user_info" not in st.session_state or st.session_state.user_info is None:
-    st.error("Session expired. Please log in again.")
-    st.session_state.logged_in = False
+# Logout button stays EXACTLY where it currently lives
+if st.button("Logout"):
+    st.session_state.clear()
     st.rerun()
 
-role = st.session_state.user_info["role"]
-
-# ------------------------------------------------------------
-# SIDEBAR NAVIGATION (Role-based)
-# ------------------------------------------------------------
-role = st.session_state.user_info["role"]
-
-if role == "Admin":
-    menu = st.sidebar.radio(
-        "Navigation",
-        ["Generate Receipt", "Receipt History", "Inventory Viewer", "User Management", "Logout"]
-    )
+# Sidebar Navigation
+if role == "admin":
+    menu = st.sidebar.radio("Menu", [
+        "Generate Receipt",
+        "Receipt History",
+        "Inventory Viewer",
+        "User Management"
+    ])
 else:
-    # Regular User
-    menu = st.sidebar.radio(
-        "Navigation",
-        ["Generate Receipt", "Logout"]
-    )
+    menu = st.sidebar.radio("Menu", [
+        "Generate Receipt",
+        "Inventory Viewer"
+    ])
 
 # ------------------------------------------------------------
 # PAGE: GENERATE RECEIPT
 # ------------------------------------------------------------
 if menu == "Generate Receipt":
-
-    st.title("🧾 Generate Receipt")
-
     customer_name = st.text_input("Customer Name")
 
-    # ADD ITEM PANEL
     with st.expander("➕ Add Item"):
-        item = st.text_input("Item Name")
-        qty = st.number_input("Quantity", min_value=0, step=1)
-        price = st.number_input("Unit Price", min_value=0.0, step=0.01)
+        item_name = st.text_input("Item Name")
+        qty = st.number_input("Quantity", min_value=1, step=1)
+        price = st.number_input("Unit Price (NGN)", min_value=0.0, step=0.01)
 
         if st.button("Add Item"):
-            if not item or qty <= 0:
-                st.error("Enter valid item details.")
-            else:
-                st.session_state.receipt_items.append({
-                    "item": item,
-                    "quantity": qty,
-                    "unit_price": price
-                })
-                st.success("Item added successfully!")
-                st.rerun()
+            st.session_state.receipt_items.append({
+                "item": item_name,
+                "quantity": qty,
+                "unit_price": price
+            })
+            st.rerun()
 
-    st.subheader("📝 Items Added")
-
+    st.subheader("Items Added")
     if st.session_state.receipt_items:
         st.table(pd.DataFrame(st.session_state.receipt_items))
-    else:
-        st.info("No items added.")
 
-    if st.button("🗑️ Clear Items"):
+    if st.button("🗑 Clear Items"):
         st.session_state.receipt_items = []
         st.rerun()
 
-    if st.button("Generate Receipt Now"):
+    if st.button("Generate Receipt PDF"):
         if not customer_name:
             st.error("Enter customer name.")
             st.stop()
 
-        if not st.session_state.receipt_items:
-            st.error("Add items before generating receipt.")
-            st.stop()
-
-        issued_by = st.session_state.user_info["full_name"]
-
-        pdf_buffer, receipt_no, subtotal, vat, total = generate_receipt_pdf(
+        buffer, receipt_no, subtotal, vat, total = generate_receipt_pdf(
             customer_name,
             st.session_state.receipt_items,
             LOGO_PATH,
-            issued_by
+            st.session_state.user_info["full_name"]
         )
 
-        upload_pdf_to_supabase(pdf_buffer, receipt_no)
+        url = upload_pdf(buffer, receipt_no)
 
-        receipt_url = (
-            f"{SUPABASE_URL}/storage/v1/object/public/"
-            f"{BUCKET}/receipts/receipt_{receipt_no}.pdf"
-        )
-
-        save_receipt_history(receipt_no, customer_name, total, receipt_url, issued_by)
-        save_receipt_items(receipt_no, st.session_state.receipt_items)
-
+        save_history(receipt_no, customer_name, total, url, st.session_state.user_info["full_name"])
+        save_items(receipt_no, st.session_state.receipt_items)
         deduct_inventory(st.session_state.receipt_items)
 
-        st.success("Receipt generated successfully!")
-        st.write(f"🔗 **Receipt URL:** {receipt_url}")
+        st.success("Receipt generated & saved!")
+        st.write(f"🔗 Receipt URL: {url}")
 
         st.download_button(
-            "📄 Download Receipt",
-            data=pdf_buffer,
+            "📄 Download PDF",
+            data=buffer,
             file_name=f"receipt_{receipt_no}.pdf",
             mime="application/pdf"
         )
 
-
 # ------------------------------------------------------------
 # PAGE: RECEIPT HISTORY (ADMIN ONLY)
 # ------------------------------------------------------------
-elif menu == "Receipt History":
-
-    st.title("📚 All Receipts")
-
+elif menu == "Receipt History" and role == "admin":
+    st.header("📚 Receipt History")
     data = supabase.table("receipt_history").select("*").order("created_at", desc=True).execute()
-    df = pd.DataFrame(data.data)
-
-    st.dataframe(df)
-
+    st.dataframe(pd.DataFrame(data.data))
 
 # ------------------------------------------------------------
-# PAGE: INVENTORY VIEWER
+# PAGE: INVENTORY VIEWER (Admin + Users)
 # ------------------------------------------------------------
 elif menu == "Inventory Viewer":
-
-    st.title("📦 Inventory Overview")
-
-    data = supabase.table("inventory").select("*").order("item_name").execute()
-    df = pd.DataFrame(data.data)
-
-    st.dataframe(df)
-
+    st.header("📦 Inventory Viewer")
+    data = supabase.table("inventory").select("*").execute()
+    st.dataframe(pd.DataFrame(data.data))
 
 # ------------------------------------------------------------
-# PAGE: CREATE USER (ADMIN ONLY)
+# PAGE: USER MANAGEMENT (ADMIN ONLY)
 # ------------------------------------------------------------
-elif menu == "Create User":
+elif menu == "User Management" and role == "admin":
+    st.header("👥 User Management")
 
-    st.title("👤 Create New User")
-
-    full_name_new = st.text_input("Full Name")
-    password_new = st.text_input("Password")
-    role_new = st.selectbox("Role", ["User", "Admin"])
+    new_name = st.text_input("Full Name")
+    new_pass = st.text_input("Password")
+    new_role = st.selectbox("Role", ["user", "admin"])
 
     if st.button("Create User"):
-        create_user(full_name_new, password_new, role_new)
+        supabase.table("users").insert({
+            "full_name": new_name,
+            "password": new_pass,
+            "role": new_role
+        }).execute()
         st.success("User created successfully!")
