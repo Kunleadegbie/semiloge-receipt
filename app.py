@@ -162,11 +162,11 @@ def save_receipt_items(receipt_no, items):
 # USER AUTHENTICATION
 # ------------------------------------------------------------
 def login(username, password):
-    res = supabase.table("users").select("*").eq("username", username).eq("password", password).execute()
+    res = supabase.table("app_users").select("*").eq("username", username).eq("password", password).execute()
     return res.data[0] if res.data else None
 
 def create_user(username, fullname, password, role):
-    supabase.table("users").insert({
+    supabase.table("app_users").insert({
         "username": username,
         "fullname": fullname,
         "password": password,
@@ -180,13 +180,14 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if "role" not in st.session_state:
-    st.session_state.role = None
+    st.session_state.role == "admin"
 
 if "fullname" not in st.session_state:
     st.session_state.fullname = None
 
 if "receipt_items" not in st.session_state:
     st.session_state.receipt_items = []
+
 
 # ------------------------------------------------------------
 # LOGIN PAGE
