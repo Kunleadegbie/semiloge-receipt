@@ -227,7 +227,7 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 # Sidebar menu based on role
-if role == "Admin":
+if role == "admin":
     menu = st.sidebar.radio("Navigation", [
         "Generate Receipt",
         "Receipt History",
@@ -316,7 +316,7 @@ if menu == "Generate Receipt":
 # ------------------------------------------------------------
 # PAGE: RECEIPT HISTORY (Admin only)
 # ------------------------------------------------------------
-elif menu == "Receipt History" and role == "Admin":
+elif menu == "Receipt History" and role == "admin":
     st.title("📚 Receipt History")
 
     res = supabase.table("receipt_history").select("*").order("created_at", desc=True).execute()
@@ -342,7 +342,7 @@ elif menu == "Inventory Viewer":
 # ------------------------------------------------------------
 # PAGE: CREATE USER (Admin only)
 # ------------------------------------------------------------
-elif menu == "Create User" and role == "Admin":
+elif menu == "Create User" and role == "admin":
     st.title("👤 Create New User")
 
     new_fullname = st.text_input("Full Name")
