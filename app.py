@@ -204,6 +204,7 @@ if "receipt_items" not in st.session_state:
     st.session_state.receipt_items = []
 
 
+
 # ------------------------------------------------------------
 # LOGIN PAGE
 # ------------------------------------------------------------
@@ -235,6 +236,16 @@ st.sidebar.button("🚪 Logout", on_click=lambda: st.session_state.update({
     "user_info": None
 }))
 
+# ------------------------------------------------------------
+# CHECK LOGIN SESSION BEFORE LOADING DASHBOARD
+# ------------------------------------------------------------
+
+if "user_info" not in st.session_state or st.session_state.user_info is None:
+    st.error("Session expired. Please log in again.")
+    st.session_state.logged_in = False
+    st.rerun()
+
+role = st.session_state.user_info["role"]
 
 # ------------------------------------------------------------
 # SIDEBAR NAVIGATION
