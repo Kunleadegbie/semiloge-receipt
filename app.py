@@ -46,12 +46,6 @@ h1, h2, h3 {
     border-radius: 8px !important;
     padding: 8px 20px !important;
 }
-.item-box {
-    border: 1px solid #ccc;
-    padding: 10px;
-    border-radius: 6px;
-    margin-bottom: 8px;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -128,7 +122,6 @@ def generate_receipt_pdf(customer_name, items, issued_by, logo_path):
     pdf.set_font("Helvetica", "I", 11)
     pdf.cell(0, 10, "Thank you for your patronage!", ln=True, align='C')
 
-    # Return PDF buffer
     pdf_buffer = BytesIO()
     pdf.output(pdf_buffer)
     pdf_buffer.seek(0)
@@ -152,7 +145,7 @@ def deduct_inventory(items):
         name = item["item"].strip().lower()
         qty = item["quantity"]
 
-        # Find matching inventory row (case-insensitive)
+        # Fetch all inventory rows
         res = supabase.table("inventory").select("*").execute()
 
         match = None
@@ -365,14 +358,11 @@ elif choice == "Profit Calculator" and st.session_state.role == "admin":
     if df.empty:
         st.info("No inventory data found.")
     else:
-        # Check if unit_price column exists
-        if "unit_price" not in df.columns:
-            st.warning("⚠ The inventory table does not contain a 'unit_price' column.")
-            st.info("Please add 'unit_price' to inventory table before using Profit Calculator.")
-            st.stop()
+        # FULL correct logic
+        df["profit_per_item"] = df["unit_price"] - df["cost_price"]
 
-        df["profit_per_item"] = df["unit_price"]  # or profit logic if cost exists
+        df["total_profit"] = df["profit_per_item"] * df["quantity"]
 
         st.subheader("Profit Summary")
-        st.dataframe(df[["item_name", "quantity", "unit_price", "profit_per_item"]])
+        st.dataframe(df[["item_name", "category", "quantity", "cost_price", "unit_price", "profit_per_item", "total_profit"]])
 
